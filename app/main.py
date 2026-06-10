@@ -27,6 +27,7 @@ from fpdf import FPDF
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- BASE DE DONNÉES & ECOSYSTÈME IA ---
 from pymongo import MongoClient
