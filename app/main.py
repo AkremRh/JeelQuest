@@ -412,9 +412,8 @@ def generate_report_and_send_email():
         print("[+] Connexion SMTP via le port 587 (TLS)...")
         
         # Connexion SMTP classique sécurisée par TLS pour les environnements Cloud
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()  # Sécurise la connexion pour Gmail
-            print("[+] Connexion TLS établie. Tentative de login...")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            print("[+] Connexion SSL établie. Tentative de login...")
             server.login(email_sender, email_password)
             print("[+] Authentification réussie. Envoi du message...")
             server.send_message(message)
