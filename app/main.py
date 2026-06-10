@@ -423,7 +423,9 @@ def generate_report_and_send_email():
         pdf_buffer.seek(0)
         pdf_base64 = base64.b64encode(pdf_buffer.read()).decode('utf-8')
         filename_report = f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf"
-
+        
+        total_students = len(df_users) if 'df_users' in locals() else len(users_list)
+        avg_xp = df_users['xp'].mean() if ('df_users' in locals() and 'xp' in df_users.columns) else 0
         payload = {
             "from": "Talentyz Analytics Agent <onboarding@resend.dev>",  
             "to": ["akremrhaimi@gmail.com"],
