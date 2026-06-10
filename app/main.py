@@ -184,7 +184,7 @@ def generate_report_and_send_email():
         
         print("[+] Étape 3 : Requête de récupération des utilisateurs...")
         print("[+] Test de lecture globale...")
-        users_list = list(db["users"].find().limit(2))
+        users_list = list(db["users"].find(query_user))
         print(f"[+] Résultat du test global : {len(users_list)} utilisateurs trouvés.")
         if not users_list:
             print("[-] Extraction impossible : Aucun utilisateur référencé pour cette entité.")
