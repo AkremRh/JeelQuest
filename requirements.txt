@@ -7,6 +7,7 @@ matplotlib
 seaborn
 fpdf2
 google-genai
+apscheduler
 
 langchain>=0.2.17,<0.3
 langchain-core>=0.2.23,<0.3
