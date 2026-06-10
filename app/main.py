@@ -422,6 +422,19 @@ def generate_report_and_send_email():
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
+
+# --- DÉCLARATION FASTAPI & MIDDLEWARES ---
+app = FastAPI(title="JeelQuest Questy V1", version="1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://beta.jeelquest.space"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+UPLOAD_FOLDER = "/tmp/uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN CORRIGÉ) ---
 @app.on_event("startup")
 async def startup_event():
@@ -456,17 +469,6 @@ def shutdown_event():
         scheduler.shutdown()
         print("[-] Scheduler arrêté proprement.")
 
-# --- DÉCLARATION FASTAPI & MIDDLEWARES ---
-app = FastAPI(title="JeelQuest Questy V1", version="1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://beta.jeelquest.space"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-UPLOAD_FOLDER = "/tmp/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # --- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
 def get_db_connection():
