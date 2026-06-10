@@ -3,7 +3,8 @@ import io
 import re
 import shutil
 import unicodedata
-import smtplib
+import requests
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import List
 from contextlib import asynccontextmanager
@@ -24,9 +25,6 @@ from bson import ObjectId
 
 # --- GÉNÉRATION DE RAPPORTS & MESSAGERIE ---
 from fpdf import FPDF
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- BASE DE DONNÉES & ECOSYSTÈME IA ---
@@ -137,9 +135,11 @@ class CorporatePDF(FPDF):
         self.ln(20) # Saut de ligne pour espacer le contenu du document
 
     def footer(self):
+        # Positionnement à 15 mm du bas de la page
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.set_text_color(156, 163, 175)
+        self.set_text_color(156, 163, 175) # Couleur grise claire pour la discrétion
+        # Numérotation dynamique de la page et mention de confidentialité
         self.cell(0, 10, f"TALENTYZ Agent Report - Page {self.page_no()}/{{nb}} - Confidential", align="C")
 
 def generate_ai_academic_summary(users_df, quests_perf_str, total_quests_count):
@@ -159,12 +159,18 @@ def generate_ai_academic_summary(users_df, quests_perf_str, total_quests_count):
     {quests_perf_str}
 
     Generate a detailed executive analysis in English. 
-    Structure it into two clean sections:
-    1. GLOBAL ENGAGEMENT DIAGNOSTIC (Analyze student dynamics based on total numbers and events)
-    2. QUEST PERFORMANCE AND ANALYSIS (Interpret which quests perform best based on their titles and engagement patterns)
+    You MUST strictly adhere to this exact output format for headers, with a double line break after each section title:
 
-    CRITICAL INSTRUCTION: Do NOT use any Markdown formatting (*, #, etc.). 
-    Use Standard Sentence Case. Do NOT write headers or whole paragraphs in block CAPITAL LETTERS.
+    1. GLOBAL ENGAGEMENT DIAGNOSTIC
+    [Insert the engagement diagnosis paragraph here]
+
+    2. QUEST PERFORMANCE AND ANALYSIS
+    [Insert the quest analysis paragraph here]
+
+    CRITICAL INSTRUCTIONS: 
+    1. Do NOT use any Markdown formatting (*, #, etc.).
+    2. Do NOT write headers or whole paragraphs in block CAPITAL LETTERS.
+    3. You must ensure there is a clear, empty line separating the section titles (1. GLOBAL...) from the start of their corresponding paragraphs. This is for PDF readability.
     """
     response = client_ai.models.generate_content(
         model="gemini-3.1-flash-lite",
@@ -268,45 +274,66 @@ def generate_report_and_send_email():
                 quests_summary_str += f"- Quest Title: {r['quest_title']} | Completion Rate: {r['completion_rate']:.1f}% | Engagement Rate: {r['engagement_rate']:.1f}%\n"
 
         total_available_quests = len(newquests_list)
+        total_students = len(df_users)
+        avg_xp = df_users['xp'].mean() if 'xp' in df_users.columns else 0
 
         summary_text = generate_ai_academic_summary(df_users, quests_summary_str, total_available_quests)
         summary_text_cleaned = clean_pdf_text(summary_text)
 
-        # Génération des représentations visuelles
+        # === GRAPHIQUE 1 : CLASSEMENT HORIZONTAL MIS À JOUR (IMAGE 3) ===
         sns.set_theme(style="whitegrid")
         df_top5_users = df_users.head(5).copy()
         df_top5_users['clean_name'] = df_top5_users.apply(lambda r: clean_pdf_text(f"{r.get('firstName', '')} {r.get('lastName', '')}"), axis=1)
         
         fig, ax1 = plt.subplots(figsize=(7.5, 3.8))
-        bars_u = ax1.barh(df_top5_users['clean_name'], df_top5_users['xp'], color='#4f46e5', height=0.5)
-        ax1.invert_yaxis()
-        ax1.set_title("GENERAL INTERN EXPERIENCE LEADERBOARD (XP)", fontsize=12, fontweight='bold')
+        bars_u = ax1.barh(df_top5_users['clean_name'], df_top5_users['xp'], color='#4f46e5', height=0.5, edgecolor='none')
+        ax1.invert_yaxis()  # Inverse l'axe pour afficher le premier en haut
+        ax1.set_title("GENERAL Intern EXPERIENCE LEADERBOARD (XP)", fontsize=12, fontweight='bold', color='#1f2937', pad=15)
+        ax1.set_xlabel("Experience Points (XP)", fontsize=10, labelpad=8)
+        ax1.tick_params(axis='both', labelsize=10)
+        
         for bar in bars_u:
             width = bar.get_width()
-            ax1.text(width + 2, bar.get_y() + bar.get_height()/2, f'{int(width)} XP', va='center', fontweight='bold')
+            ax1.text(width + (width * 0.01 + 2), bar.get_y() + bar.get_height()/2, f'{int(width)} XP', 
+                     va='center', ha='left', fontsize=10, fontweight='bold', color='#374151')
+                     
+        sns.despine(left=True, bottom=True)
         plt.tight_layout()
         user_chart_path = "temp_user_xp.png"
-        fig.savefig(user_chart_path, dpi=250)
+        fig.savefig(user_chart_path, dpi=250, format='png')
         plt.close(fig)
 
+        # === GRAPHIQUE 2 : ANALYSE DES QUÊTES AVEC ANNOTATIONS (IMAGE 5) ===
         fig, ax2 = plt.subplots(figsize=(7.5, 3.8))
-        if not df_top_quests.empty:
-            df_top_quests['clean_title'] = df_top_quests['quest_title'].apply(lambda x: clean_pdf_text(x)[:26] + "...")
-            ax2.bar(df_top_quests['clean_title'], df_top_quests['engagement_rate'], color='#0284c7', alpha=0.8, width=0.35, label="Engagement Rate")
-            ax2.plot(df_top_quests['clean_title'], df_top_quests['completion_rate'], color='#10b981', marker='o', linewidth=2.5, label="Completion Rate")
-        ax2.set_title("COMPARATIVE QUEST IMPACT AND COMPLETION METRICS", fontsize=12, fontweight='bold')
-        ax2.legend()
-        plt.xticks(rotation=15, ha='right')
+        df_top5_q_chart = df_top_quests.copy() if not df_top_quests.empty else pd.DataFrame(columns=['quest_title', 'engagement_rate', 'completion_rate'])
+        
+        if not df_top5_q_chart.empty:
+            df_top5_q_chart['clean_title'] = df_top5_q_chart['quest_title'].apply(lambda x: clean_pdf_text(x)[:26] + "..." if len(clean_pdf_text(x)) > 28 else clean_pdf_text(x))
+            bars_q = ax2.bar(df_top5_q_chart['clean_title'], df_top5_q_chart['engagement_rate'], color='#0284c7', alpha=0.8, width=0.35, label="Engagement Rate")
+            ax2.plot(df_top5_q_chart['clean_title'], df_top5_q_chart['completion_rate'], color='#10b981', marker='o', markersize=6, linewidth=2.5, label="Completion Rate")
+            
+            for i, txt in enumerate(df_top5_q_chart['completion_rate']):
+                ax2.annotate(f"{txt:.1f}%", (df_top5_q_chart['clean_title'].iloc[i], df_top5_q_chart['completion_rate'].iloc[i]),
+                             textcoords="offset points", xytext=(0,8), ha='center', fontsize=9, fontweight='bold', color='#047857')
+
+        ax2.set_ylabel("Percentage (%)", fontsize=10, labelpad=8)
+        ax2.set_ylim(0, 115)
+        ax2.set_title("COMPARATIVE QUEST IMPACT AND COMPLETION METRICS", fontsize=12, fontweight='bold', color='#1f2937', pad=15)
+        ax2.set_xticklabels(df_top5_q_chart['clean_title'] if not df_top5_q_chart.empty else [], rotation=15, ha='right', fontsize=9)
+        ax2.tick_params(axis='y', labelsize=10)
+        ax2.legend(loc="upper right", fontsize=9, frameon=True, facecolor='#ffffff', edgecolor='#e5e7eb')
+        sns.despine()
         plt.tight_layout()
         quest_chart_path = "temp_quest_perf.png"
-        fig.savefig(quest_chart_path, dpi=250)
+        fig.savefig(quest_chart_path, dpi=250, format='png')
         plt.close(fig)
 
-        # Compilation FPDF
+        # === 5. CONSTRUCTION DU DOCUMENT PDF DE FAÇON STRUCTURÉE ===
+        print("[+] Structuring PDF document pages...")
         pdf = CorporatePDF()
         pdf.alias_nb_pages()
         
-        # Page 1 : Rapport Prescriptif de l'IA
+        # --- PAGE 1 : ÉVALUATION PRESCRIPTIVE DE L'IA ---
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(31, 41, 55)
@@ -314,134 +341,140 @@ def generate_report_and_send_email():
         pdf.ln(3)
         pdf.set_text_color(55, 65, 81)
         pdf.set_font("Helvetica", "", 10.5)
-        # Affichage du bloc textuel généré par Gemini (multi_cell gère les retours à la ligne automatiques)
         pdf.multi_cell(0, 5.5, summary_text_cleaned)
         
-        # Page 2 : Classement Étudiants
+        # --- PAGE 2 : CLASSEMENT ÉTUDIANTS & GRAPHIQUE ---
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(31, 41, 55)
         pdf.cell(0, 8, "2. TOP 5 PERFORMING INTERNS (COMPETITIVE LEADERBOARD)", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
-        col_widths = [45, 55, 20, 25, 45]
+        
+        col_widths = [45, 55, 20, 25, 45] 
         headers = ["Full Name", "Email Address", "Level", "Points (XP)", "Profile"]
+        
         pdf.set_fill_color(243, 244, 246)
+        pdf.set_text_color(17, 24, 39)
         pdf.set_font("Helvetica", "B", 9.5)
-        for i, h in enumerate(headers):
-            pdf.cell(col_widths[i], 7.5, h, border=1, align="C", fill=True)
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths[i], 7.5, header, border=1, align="C", fill=True)
         pdf.ln()
+        
         pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(55, 65, 81)
         for _, row in df_users.head(5).iterrows():
-            fullname = clean_pdf_text(f"{row.get('firstName', '')} {row.get('lastName', '')}")[:22]
-            email = clean_pdf_text(str(row.get('email', '')))[:26]
-            pdf.cell(col_widths[0], 7, fullname, border=1)
-            pdf.cell(col_widths[1], 7, email, border=1)
-            pdf.cell(col_widths[2], 7, clean_pdf_text(str(row.get('level', '-'))), border=1, align="C")
-            pdf.cell(col_widths[3], 7, clean_pdf_text(str(row.get('xp', '0'))), border=1, align="R")
-            pdf.cell(col_widths[4], 7, clean_pdf_text(str(row.get('aiProfile', '-'))), border=1, align="C")
+            fullname = clean_pdf_text(f"{row.get('firstName', '')} {row.get('lastName', '')}")
+            email = clean_pdf_text(str(row.get('email', '')))
+            level = clean_pdf_text(str(row.get('level', '-')))
+            xp = clean_pdf_text(str(row.get('xp', '0')))
+            ai_profile = clean_pdf_text(str(row.get('aiProfile', 'Not Defined')))
+            
+            if len(fullname) > 22: fullname = fullname[:20] + "..."
+            if len(email) > 26: email = email[:24] + "..."
+            
+            pdf.cell(col_widths[0], 7, fullname, border=1, align="L")
+            pdf.cell(col_widths[1], 7, email, border=1, align="L")
+            pdf.cell(col_widths[2], 7, level, border=1, align="C")
+            pdf.cell(col_widths[3], 7, xp, border=1, align="R")
+            pdf.cell(col_widths[4], 7, ai_profile, border=1, align="C")
             pdf.ln()
+            
         pdf.ln(4)
-        pdf.image(user_chart_path, x=15, w=180)
-
-        # Page 3 : Métriques des Quêtes
+        current_y = pdf.get_y()
+        target_y = current_y + 8 if current_y + 85 < 270 else 90
+        pdf.image(user_chart_path, x=15, y=target_y, w=180)
+        
+        # --- PAGE 3 : PERFORMANCES DES QUÊTES & GRAPHIQUE ANALYTIQUE ---
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(31, 41, 55)
         pdf.cell(0, 8, "3. QUEST ENGAGEMENT AND COMPLETION METRICS", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
-        col_widths_quests = [85, 35, 35, 35]
+        
+        col_widths_quests = [85, 35, 35, 35] 
         headers_quests = ["Quest Title", "Completion Rate", "Engagement Rate", "Total Attempts"]
-        pdf.set_fill_color(230, 242, 254)
+        
+        pdf.set_fill_color(230, 242, 254) 
+        pdf.set_text_color(30, 58, 138)
         pdf.set_font("Helvetica", "B", 9.5)
         for i, h_q in enumerate(headers_quests):
             pdf.cell(col_widths_quests[i], 7.5, h_q, border=1, align="C", fill=True)
         pdf.ln()
+        
         pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(55, 65, 81)
+        
         if not df_top_quests.empty:
             for _, row in df_top_quests.iterrows():
-                q_name = clean_pdf_text(str(row['quest_title']))[:42]
-                pdf.cell(col_widths_quests[0], 7, q_name, border=1)
-                pdf.cell(col_widths_quests[1], 7, f"{row['completion_rate']:.1f}%", border=1, align="C")
-                pdf.cell(col_widths_quests[2], 7, f"{row['engagement_rate']:.1f}%", border=1, align="C")
-                pdf.cell(col_widths_quests[3], 7, str(int(row['total_attempts'])), border=1, align="C")
+                q_name = clean_pdf_text(str(row['quest_title']))
+                if len(q_name) > 42: q_name = q_name[:40] + "..."
+                
+                c_rate = f"{row['completion_rate']:.1f}%"
+                e_rate = f"{row['engagement_rate']:.1f}%"
+                attempts = str(int(row['total_attempts']))
+                
+                pdf.cell(col_widths_quests[0], 7, q_name, border=1, align="L")
+                pdf.cell(col_widths_quests[1], 7, c_rate, border=1, align="C")
+                pdf.cell(col_widths_quests[2], 7, e_rate, border=1, align="C")
+                pdf.cell(col_widths_quests[3], 7, attempts, border=1, align="C")
                 pdf.ln()
+        else:
+            pdf.cell(sum(col_widths_quests), 8, "No active quest metrics available.", border=1, align="C")
+            pdf.ln()
+            
         pdf.ln(4)
-        pdf.image(quest_chart_path, x=15, w=180)
+        current_y_q = pdf.get_y()
+        target_y_q = current_y_q + 8 if current_y_q + 85 < 270 else 90
+        pdf.image(quest_chart_path, x=15, y=target_y_q, w=180)
 
-        # Page 4 : Badges hebdomadaires dynamiques
+        # --- PAGE 4 : BADGES HEBDOMADAIRES DYNAMIQUES ---
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 8, "4. WEEKLY UNLOCKED ACHIEVEMENTS", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(6)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(0, 8, f"4. WEEKLY UNLOCKED ACHIEVEMENTS", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(6) 
+        
         if achievement_winners:
             for ach_name, students in achievement_winners.items():
                 students_list_str = ", ".join(sorted(list(students)))
-                pdf.set_fill_color(241, 245, 249)
-                pdf.set_draw_color(226, 232, 240)
+                
+                pdf.set_fill_color(241, 245, 249) 
+                pdf.set_draw_color(226, 232, 240) 
+                
                 pdf.set_font("Helvetica", "B", 9.5)
-                pdf.set_text_color(30, 41, 59)
+                pdf.set_text_color(30, 41, 59) 
                 pdf.cell(55, 8, f"  {clean_pdf_text(ach_name)}", border=1, fill=True, new_x="RIGHT", new_y="TOP")
+                
                 pdf.set_font("Helvetica", "", 9.5)
                 pdf.set_text_color(71, 85, 105)
                 content_text = f" obtained by [ {clean_pdf_text(students_list_str)} ]"
+                
                 pdf.cell(130, 8, content_text, border=1, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(2.5)
+                pdf.ln(2.5) 
         else:
             pdf.set_font("Helvetica", "I", 10)
             pdf.set_text_color(148, 163, 184)
             pdf.cell(0, 8, "No achievements were fully unlocked during this tracking period.", new_x="LMARGIN", new_y="NEXT")
-
+            
         # Sauvegarde en mémoire tampon
         pdf_buffer = io.BytesIO()
         pdf.output(pdf_buffer)
         pdf_buffer.seek(0)
 
-        # Suppression des résidus locaux d'images
+        # Suppression immédiate des fichiers graphiques locaux temporaires
         for p in [user_chart_path, quest_chart_path]:
             if os.path.exists(p): os.remove(p)
 
-        # Routage sortant SMTP
-        email_sender = os.getenv("EMAIL_SENDER")
-        email_password = os.getenv("EMAIL_PASSWORD")
-        email_receiver = os.getenv("ADMIN_EMAIL")
-
-        message = MIMEMultipart()
-        message['From'] = email_sender
-        message['To'] = email_receiver
-        message['Subject'] = f"🎓 [Talentyz Performance] Extended Visual Analytics Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f7;">
-            <h2>Weekly Talentyz Platform Indicators</h2>
-            <p>Active Tracked Students: {len(df_users)}</p>
-            <p>L'analyse prescriptive globale basée sur l'IA et l'évaluation graphique comparative sont incluses dans la pièce jointe.</p>
-        </body>
-        </html>
-        """
-        message.attach(MIMEText(html, 'html'))
-        attachment = MIMEApplication(pdf_buffer.read(), _subtype='pdf')
-        attachment.add_header('Content-Disposition', 'attachment', filename=f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf")
-        message.attach(attachment)
-        
-        print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
-        print("[+] Connexion SMTP via le port 465 (SSL)...")
-        
-        import base64
-        import requests
-
+        # --- ROUTAGE SORTANT VIA L'API DE RESEND (PORT 443 HTTPS) ---
+        print("[+] Étape 5 : Préparation de l'envoi via l'API HTTP Resend...")
         resend_api_key = os.getenv("RESEND_API_KEY")
         if not resend_api_key:
             print("[-] Erreur : RESEND_API_KEY manquante dans l'environnement Railway.")
             return
 
-        # On encode le PDF en Base64 pour l'envoi en JSON
-        pdf_buffer.seek(0)
         pdf_base64 = base64.b64encode(pdf_buffer.read()).decode('utf-8')
         filename_report = f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf"
-        
-        total_students = len(df_users) if 'df_users' in locals() else len(users_list)
-        avg_xp = df_users['xp'].mean() if ('df_users' in locals() and 'xp' in df_users.columns) else 0
+
         payload = {
             "from": "Talentyz Analytics Agent <onboarding@resend.dev>",  
             "to": ["akremrhaimi@gmail.com"],
@@ -468,12 +501,10 @@ def generate_report_and_send_email():
                     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Active Tracked Interns:</td>
-                           
-                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{total_students}</td> 
+                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{total_students}</td>
                         </tr>
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Average Experience Points:</td>
-                            
                             <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{avg_xp:.1f} XP</td>
                         </tr>
                     </table>
@@ -485,7 +516,6 @@ def generate_report_and_send_email():
                 
                 <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
                 
-
                 <div style="text-align: center; color: #94a3b8; font-size: 12px;">
                     Automated Transmission - Questy AI Academic Reporting Engine.
                 </div>
@@ -517,7 +547,6 @@ def generate_report_and_send_email():
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
-
 # --- DÉCLARATION FASTAPI & MIDDLEWARES ---
 app = FastAPI(title="JeelQuest Questy V1", version="1.0")
 app.add_middleware(
@@ -533,29 +562,22 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN CORRIGÉ) ---
 @app.on_event("startup")
 async def startup_event():
-    # 1. Initialisation obligatoire du Vectorstore pour Questy RAG
     print("[+] Initialisation obligatoire du Vectorstore pour Questy RAG...")
     setup_vectorstore()
 
-    # 2. Initialisation du scheduler explicitement en UTC
     global scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
-
-    # 3. Ajout du job récurrent pour les semaines suivantes
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
         weeks=1
     )
-
-    # 4. Démarrage du scheduler
     scheduler.start()
     print("[+] Scheduler démarré en UTC.")
 
-    # 5. Force le premier lancement en tâche de fond immédiate sans bloquer l'API
+    # Lancement initial asynchrone sécurisé en tâche de fond
     asyncio.create_task(asyncio.to_thread(generate_report_and_send_email))
     print("[+] Premier rapport forcé au démarrage dans un thread dédié.")
-
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -563,7 +585,6 @@ def shutdown_event():
     if 'scheduler' in globals():
         scheduler.shutdown()
         print("[-] Scheduler arrêté proprement.")
-
 
 # --- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
 def get_db_connection():
@@ -691,7 +712,6 @@ async def chatbot(request: ChatRequest):
         db = get_db_connection()
         chat_collection = db["chat_history"]
 
-        # Utilisation de GOOGLE_API_KEY (Clé dédiée pour Questy)
         llm = ChatGoogleGenerativeAI(
             model="gemini-3.1-flash-lite",
             google_api_key=GOOGLE_API_KEY,
