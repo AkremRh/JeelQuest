@@ -55,7 +55,7 @@ GOOGLE_API_KEY2 = os.getenv("GOOGLE_API_KEY2")    # Clé dédiée aux embeddings
 TARGET_UNIVERSITY_ID = "6990b6d7c0e708ede1ed0178"
 
 # Initialisation du client pour l'agent analytique (Rapports)
-client_ai = Client(api_key=GEMINI_API_KEY)
+client_ai = Client(api_key=GOOGLE_API_KEY)
 
 # Initialisation du modèle d'embeddings (Questy RAG)
 embedding_model = GoogleGenerativeAIEmbeddings(
