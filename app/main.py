@@ -183,8 +183,9 @@ def generate_report_and_send_email():
         query_user = {"$or": [{"universityId": TARGET_UNIVERSITY_ID}, {"universityId": obj_university_id}]}
         
         print("[+] Étape 3 : Requête de récupération des utilisateurs...")
-        users_list = list(db["users"].find(query_user))
-        print(f"[+] Étape 4 : {len(users_list)} utilisateurs récupérés.")
+        print("[+] Test de lecture globale...")
+        users_list = list(db["users"].find().limit(2))
+        print(f"[+] Résultat du test global : {len(users_list)} utilisateurs trouvés.")
         if not users_list:
             print("[-] Extraction impossible : Aucun utilisateur référencé pour cette entité.")
             return
