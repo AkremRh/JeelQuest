@@ -484,7 +484,7 @@ async def startup_event():
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
-        weeks=1
+        minutes=1
     )
 
     # 4. Démarrage du scheduler
