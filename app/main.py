@@ -426,7 +426,7 @@ def generate_report_and_send_email():
 
         payload = {
             "from": "Talentyz Analytics <onboarding@resend.dev>",  # Domaine de test par défaut
-            "to": [akremtarajy@gmail.com],
+            "to": ["akremtarajy@gmail.com"],
             "subject": f"🎓 [Talentyz Performance] Extended Visual Analytics Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
             "html": f"""
             <h3>Weekly Talentyz Platform Indicators</h3>
