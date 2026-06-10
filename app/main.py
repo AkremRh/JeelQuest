@@ -9,12 +9,12 @@ from typing import List
 from contextlib import asynccontextmanager
 import asyncio
 
---- FRAMEWORK WEB & API ---
+# --- FRAMEWORK WEB & API ---
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
---- TRAITEMENT DE DONNÉES & VISUALISATION ---
+# --- TRAITEMENT DE DONNÉES & VISUALISATION ---
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Force un backend non-interactif pour éviter les crashs en environnement conteneurisé (Docker)
@@ -22,20 +22,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from bson import ObjectId
 
---- GÉNÉRATION DE RAPPORTS & MESSAGERIE ---
+# --- GÉNÉRATION DE RAPPORTS & MESSAGERIE ---
 from fpdf import FPDF
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from apscheduler.schedulers.background import BackgroundScheduler
 
---- BASE DE DONNÉES & ECOSYSTÈME IA ---
+# --- BASE DE DONNÉES & ECOSYSTÈME IA ---
 from pymongo import MongoClient
 from pymilvus import connections, Collection, utility
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 
---- INTÉGRATION LANGCHAIN & GEMINI ---
+# --- INTÉGRATION LANGCHAIN & GEMINI ---
 from google.genai import Client  # SDK Google GenAI natif pour l'agent analytique
 from langchain_community.vectorstores import Milvus
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
@@ -43,7 +43,7 @@ from langchain_core.documents import Document
 from langchain.chains import RetrievalQA
 load_dotenv()
 
---- CHARGEMENT DES COMPOSANTS ET CONFIGURATIONS ---
+# --- CHARGEMENT DES COMPOSANTS ET CONFIGURATIONS ---
 ZILLIZ_URI = os.getenv("ZILLIZ_URI")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
@@ -64,7 +64,7 @@ embedding_model = GoogleGenerativeAIEmbeddings(
 )
 vectorstore = None
 
---- INITIALISATION ET SÉCURISATION DU VECTORSTORE ---
+# --- INITIALISATION ET SÉCURISATION DU VECTORSTORE ---
 def setup_vectorstore():
     """Initialise, vérifie la cohérence dimensionnelle et charge la collection Milvus/Zilliz"""
     global vectorstore
@@ -112,7 +112,7 @@ def setup_vectorstore():
         )
         return vectorstore
 
---- LOGIQUE ET FORMATAGE DU PIPELINE DE COMPILATION DE RAPPORT (TALENTYZ) ---
+# --- LOGIQUE ET FORMATAGE DU PIPELINE DE COMPILATION DE RAPPORT (TALENTYZ) ---
 def clean_pdf_text(text):
     if not text: return ""
     text = str(text)
@@ -411,7 +411,7 @@ def generate_report_and_send_email():
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
         print("[+] Connexion SMTP via le port 587 (TLS)...")
         
-        # FIX EXÉCUTION ENVIRO-CLOUD (PORT 587 & STARTTLS)
+        # Connexion SMTP classique sécurisée par TLS pour les environnements Cloud
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()  # Sécurise la connexion pour Gmail
             print("[+] Connexion TLS établie. Tentative de login...")
@@ -423,17 +423,17 @@ def generate_report_and_send_email():
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
---- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
+# --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. FIX CRITICAL : Initialisation du Vectorstore au démarrage de l'app
+    # Initialisation obligatoire du Vectorstore au démarrage de l'application
     print("[+] Initialisation obligatoire du Vectorstore pour Questy RAG...")
     setup_vectorstore()
 
-    # 2. Initialisation du scheduler explicitement en UTC
+    # Initialisation du scheduler explicitement en UTC
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    # 3. Ajout du job hebdomadaire
+    # Ajout du job hebdomadaire avec exécution immédiate
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
@@ -441,17 +441,17 @@ async def lifespan(app: FastAPI):
         next_run_time=datetime.now(timezone.utc)
     )
 
-    # 4. Démarrage du scheduler
+    # Démarrage du scheduler
     scheduler.start()
     print("[+] Scheduler démarré en UTC : Premier rapport initié en tâche de fond.")
 
     yield
 
-    # 5. Arrêt propre lors de la fermeture de l'application
+    # Arrêt propre lors de la fermeture de l'application
     scheduler.shutdown()
     print("[-] Scheduler arrêté proprement.")
 
---- DÉCLARATION FASTAPI & MIDDLEWARES ---
+# --- DÉCLARATION FASTAPI & MIDDLEWARES ---
 app = FastAPI(title="JeelQuest Questy V1", version="1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -463,7 +463,7 @@ app.add_middleware(
 UPLOAD_FOLDER = "/tmp/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
---- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
+# --- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
 def get_db_connection():
     if not MONGO_URI:
         raise Exception("MONGO_URI non configurée dans l'environnement.")
@@ -499,7 +499,7 @@ def split_text(text, chunk_size=300, overlap=50):
         start += chunk_size - overlap
     return chunks
 
---- ENDPOINT 1 : CHARGEMENT ET CHUNKING DES DOCUMENTS ---
+# --- ENDPOINT 1 : CHARGEMENT ET CHUNKING DES DOCUMENTS ---
 @app.post("/upload-documents/")
 async def upload_files(document: UploadFile = File(...)):
     uploaded_files = []
@@ -571,7 +571,7 @@ async def upload_files(document: UploadFile = File(...)):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
---- ENDPOINT 2 : CHATBOT INTELLIGENT (QUESTY INFERENCE) ---
+# --- ENDPOINT 2 : CHATBOT INTELLIGENT (QUESTY INFERENCE) ---
 def get_retriever():
     global vectorstore
     if vectorstore is None:
