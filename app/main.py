@@ -303,16 +303,20 @@ def generate_report_and_send_email():
         # Page 1 : Rapport Prescriptif de l'IA
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(31, 41, 55)
         pdf.cell(0, 8, "1. ARTIFICIAL INTELLIGENCE PRESCRIPTIVE EVALUATION", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
+        pdf.set_text_color(55, 65, 81)
         pdf.set_font("Helvetica", "", 10.5)
+        # Affichage du bloc textuel généré par Gemini (multi_cell gère les retours à la ligne automatiques)
         pdf.multi_cell(0, 5.5, summary_text_cleaned)
         
         # Page 2 : Classement Étudiants
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(31, 41, 55)
         pdf.cell(0, 8, "2. TOP 5 PERFORMING INTERNS (COMPETITIVE LEADERBOARD)", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
+        pdf.ln(1)
         col_widths = [45, 55, 20, 25, 45]
         headers = ["Full Name", "Email Address", "Level", "Points (XP)", "Profile"]
         pdf.set_fill_color(243, 244, 246)
@@ -336,8 +340,9 @@ def generate_report_and_send_email():
         # Page 3 : Métriques des Quêtes
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(31, 41, 55)
         pdf.cell(0, 8, "3. QUEST ENGAGEMENT AND COMPLETION METRICS", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(2)
+        pdf.ln(1)
         col_widths_quests = [85, 35, 35, 35]
         headers_quests = ["Quest Title", "Completion Rate", "Engagement Rate", "Total Attempts"]
         pdf.set_fill_color(230, 242, 254)
@@ -366,13 +371,18 @@ def generate_report_and_send_email():
             for ach_name, students in achievement_winners.items():
                 students_list_str = ", ".join(sorted(list(students)))
                 pdf.set_fill_color(241, 245, 249)
+                pdf.set_draw_color(226, 232, 240)
                 pdf.set_font("Helvetica", "B", 9.5)
-                pdf.cell(55, 8, f"  {clean_pdf_text(ach_name)}", border=1, fill=True)
+                pdf.set_text_color(30, 41, 59)
+                pdf.cell(55, 8, f"  {clean_pdf_text(ach_name)}", border=1, fill=True, new_x="RIGHT", new_y="TOP")
                 pdf.set_font("Helvetica", "", 9.5)
-                pdf.cell(130, 8, f" obtained by [ {clean_pdf_text(students_list_str)} ]", border=1)
-                pdf.ln(10.5)
+                pdf.set_text_color(71, 85, 105)
+                content_text = f" obtained by [ {clean_pdf_text(students_list_str)} ]"
+                pdf.cell(130, 8, content_text, border=1, new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(2.5)
         else:
             pdf.set_font("Helvetica", "I", 10)
+            pdf.set_text_color(148, 163, 184)
             pdf.cell(0, 8, "No achievements were fully unlocked during this tracking period.", new_x="LMARGIN", new_y="NEXT")
 
         # Sauvegarde en mémoire tampon
@@ -452,12 +462,12 @@ def generate_report_and_send_email():
                     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Active Tracked Interns:</td>
-                            # CORRIGÉ : total_students au lieu de total_students_val
+                           
                             <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{total_students}</td> 
                         </tr>
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Average Experience Points:</td>
-                            # CORRIGÉ : avg_xp au lieu de avg_xp_val
+                            
                             <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{avg_xp:.1f} XP</td>
                         </tr>
                     </table>
