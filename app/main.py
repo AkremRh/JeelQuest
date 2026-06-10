@@ -425,7 +425,7 @@ def generate_report_and_send_email():
         filename_report = f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf"
 
         payload = {
-            "from": "Talentyz Analytics Agent <onboarding@resend.dev>",  # Domaine de test par défaut
+            "from": "Talentyz Analytics Agent <onboarding@resend.dev>",  
             "to": ["akremrhaimi@gmail.com"],
             "subject": f"🎓 [Talentyz Performance] Extended Visual Analytics Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
             "html": f"""
@@ -450,11 +450,13 @@ def generate_report_and_send_email():
                     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Active Tracked Interns:</td>
-                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{total_students_val}</td>
+                            # CORRIGÉ : total_students au lieu de total_students_val
+                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{total_students}</td> 
                         </tr>
                         <tr>
                             <td style="padding: 6px 0; color: #475569;">Average Experience Points:</td>
-                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{avg_xp_val:.1f} XP</td>
+                            # CORRIGÉ : avg_xp au lieu de avg_xp_val
+                            <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #1e293b;">{avg_xp:.1f} XP</td>
                         </tr>
                     </table>
                 </div>
@@ -465,6 +467,7 @@ def generate_report_and_send_email():
                 
                 <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
                 
+
                 <div style="text-align: center; color: #94a3b8; font-size: 12px;">
                     Automated Transmission - Questy AI Academic Reporting Engine.
                 </div>
