@@ -49,6 +49,7 @@ ZILLIZ_URI = os.getenv("ZILLIZ_URI")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI_1 = os.getenv("MONGO_URI_1")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")      
 GOOGLE_API_KEY2 = os.getenv("GOOGLE_API_KEY2")    # Clé dédiée aux embeddings LangChain
 
