@@ -411,23 +411,48 @@ def generate_report_and_send_email():
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
         print("[+] Connexion SMTP via le port 465 (SSL)...")
         
-        # Résolution forcée en IPv4 pour contourner le blocage réseau du conteneur
-        import socket
-        try:
-            # On récupère l'adresse IPv4 de Gmail
-            gmail_ipv4 = socket.gethostbyname("smtp.gmail.com")
-            print(f"[+] IP Gmail détectée : {gmail_ipv4}")
-        except Exception:
-            gmail_ipv4 = "173.194.76.108" # IP Fallback standard de Google SMTP
-        
-        # Connexion SSL directe sur le port 465
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            print("[+] Connexion SSL établie. Tentative de login...")
-            server.login(email_sender, email_password)
-            print("[+] Authentification réussie. Envoi du message...")
-            server.send_message(message)
-            
-        print("[+] Rapport d'analyse d'engagement Talentyz expédié avec succès.")
+        import base64
+        import requests
+
+        resend_api_key = os.getenv("RESEND_API_KEY")
+        if not resend_api_key:
+            print("[-] Erreur : RESEND_API_KEY manquante dans l'environnement Railway.")
+            return
+
+        # On encode le PDF en Base64 pour l'envoi en JSON
+        pdf_buffer.seek(0)
+        pdf_base64 = base64.b64encode(pdf_buffer.read()).decode('utf-8')
+        filename_report = f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf"
+
+        payload = {
+            "from": "Talentyz Analytics <onboarding@resend.dev>",  # Domaine de test par défaut
+            "to": [email_receiver],
+            "subject": f"🎓 [Talentyz Performance] Extended Visual Analytics Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            "html": f"""
+            <h3>Weekly Talentyz Platform Indicators</h3>
+            <p>Active Tracked Students: {len(df_users)}</p>
+            <p>L'analyse prescriptive globale basée sur l'IA et l'évaluation graphique comparative sont incluses dans la pièce jointe.</p>
+            """,
+            "attachments": [
+                {
+                    "content": pdf_base64,
+                    "filename": filename_report
+                }
+            ]
+        }
+
+        headers = {
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        print("[+] Envoi de la requête HTTP POST à l'API Resend (Port 443)...")
+        response = requests.post("https://api.resend.com/emails", json=payload, headers=headers)
+
+        if response.status_code in [200, 201]:
+            print("[+] Rapport d'analyse d'engagement Talentyz expédié avec succès via l'API Resend ! ✨")
+        else:
+            print(f"[-] Échec de l'envoi via Resend. Code : {response.status_code}, Réponse : {response.text}")
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
