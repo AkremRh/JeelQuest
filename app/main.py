@@ -412,8 +412,12 @@ def generate_report_and_send_email():
         attachment.add_header('Content-Disposition', 'attachment', filename=f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf")
         message.attach(attachment)
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        print("[+] Connexion SMTP via le port 587 (TLS)...")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 587) as server:
+            server.starttls()  # <- Sécurise la connexion pour Gmail
+            print("[+] Connexion TLS établie. Tentative de login...")
             server.login(email_sender, email_password)
+            print("[+] Authentification réussie. Envoi du message...")
             server.send_message(message)
         print("[+] Rapport d'analyse d'engagement Talentyz expédié avec succès.")
     except Exception as e:
