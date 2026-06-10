@@ -9,12 +9,12 @@ from typing import List
 from contextlib import asynccontextmanager
 import asyncio
 
-# --- FRAMEWORK WEB & API ---
+--- FRAMEWORK WEB & API ---
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# --- TRAITEMENT DE DONNÉES & VISUALISATION ---
+--- TRAITEMENT DE DONNÉES & VISUALISATION ---
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Force un backend non-interactif pour éviter les crashs en environnement conteneurisé (Docker)
@@ -22,38 +22,36 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from bson import ObjectId
 
-# --- GÉNÉRATION DE RAPPORTS & MESSAGERIE ---
+--- GÉNÉRATION DE RAPPORTS & MESSAGERIE ---
 from fpdf import FPDF
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# --- BASE DE DONNÉES & ECOSYSTÈME IA ---
+--- BASE DE DONNÉES & ECOSYSTÈME IA ---
 from pymongo import MongoClient
 from pymilvus import connections, Collection, utility
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 
-# --- INTÉGRATION LANGCHAIN & GEMINI ---
+--- INTÉGRATION LANGCHAIN & GEMINI ---
 from google.genai import Client  # SDK Google GenAI natif pour l'agent analytique
 from langchain_community.vectorstores import Milvus
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_core.documents import Document
 from langchain.chains import RetrievalQA
-
 load_dotenv()
 
-# --- CHARGEMENT DES COMPOSANTS ET CONFIGURATIONS ---
+--- CHARGEMENT DES COMPOSANTS ET CONFIGURATIONS ---
 ZILLIZ_URI = os.getenv("ZILLIZ_URI")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_URI_1 = os.getenv("MONGO_URI_1")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")      
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 GOOGLE_API_KEY2 = os.getenv("GOOGLE_API_KEY2")    # Clé dédiée aux embeddings LangChain
-
-
 TARGET_UNIVERSITY_ID = "6990b6d7c0e708ede1ed0178"
 
 # Initialisation du client pour l'agent analytique (Rapports)
@@ -64,10 +62,9 @@ embedding_model = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-2",
     google_api_key=GOOGLE_API_KEY2
 )
-
 vectorstore = None
 
-# --- INITIALISATION ET SÉCURISATION DU VECTORSTORE ---
+--- INITIALISATION ET SÉCURISATION DU VECTORSTORE ---
 def setup_vectorstore():
     """Initialise, vérifie la cohérence dimensionnelle et charge la collection Milvus/Zilliz"""
     global vectorstore
@@ -76,7 +73,7 @@ def setup_vectorstore():
         test_vector = embedding_model.embed_query("test")
         expected_dim = len(test_vector)
         print(f"[+] Dimension attendue pour les embeddings : {expected_dim}")
-        
+
         if utility.has_collection(COLLECTION_NAME):
             collection = Collection(COLLECTION_NAME)
             collection.load()
@@ -115,8 +112,7 @@ def setup_vectorstore():
         )
         return vectorstore
 
-
-# --- LOGIQUE ET FORMATAGE DU PIPELINE DE COMPILATION DE RAPPORT (TALENTYZ) ---
+--- LOGIQUE ET FORMATAGE DU PIPELINE DE COMPILATION DE RAPPORT (TALENTYZ) ---
 def clean_pdf_text(text):
     if not text: return ""
     text = str(text)
@@ -147,7 +143,7 @@ def generate_ai_academic_summary(users_df, quests_perf_str, total_quests_count):
     prompt = f"""
     You are an expert academic data analyst and student success consultant.
     Analyze the following consolidated matrix for University 'Talentyz'.
-    
+
     KEY METRICS:
     - Total Monitored Students: {total_students}
     - Average Experience Points (XP): {avg_xp:.1f}
@@ -176,16 +172,16 @@ def generate_report_and_send_email():
     try:
         print("[+] Étape 1 : Début du cycle analytique...")
         print(f"[+] Étape 2 : Tentative de connexion à MongoDB avec URI...")
-        client_mongo = MongoClient(MONGO_URI_1)
+        client_mongo = MongoClient(MONGO_URI_1 if MONGO_URI_1 else MONGO_URI)
         db = client_mongo["pfe"]
-        
+
         obj_university_id = ObjectId(TARGET_UNIVERSITY_ID) if ObjectId.is_valid(TARGET_UNIVERSITY_ID) else None
         query_user = {"$or": [{"universityId": TARGET_UNIVERSITY_ID}, {"universityId": obj_university_id}]}
         
         print("[+] Étape 3 : Requête de récupération des utilisateurs...")
-        print("[+] Test de lecture globale...")
         users_list = list(db["users"].find(query_user))
-        print(f"[+] Résultat du test global : {len(users_list)} utilisateurs trouvés.")
+        print(f"[+] Résultat de la requête : {len(users_list)} utilisateurs trouvés.")
+        
         if not users_list:
             print("[-] Extraction impossible : Aucun utilisateur référencé pour cette entité.")
             return
@@ -411,61 +407,63 @@ def generate_report_and_send_email():
         attachment = MIMEApplication(pdf_buffer.read(), _subtype='pdf')
         attachment.add_header('Content-Disposition', 'attachment', filename=f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf")
         message.attach(attachment)
+        
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
         print("[+] Connexion SMTP via le port 587 (TLS)...")
-        with smtplib.SMTP_SSL("smtp.gmail.com", 587) as server:
-            server.starttls()  # <- Sécurise la connexion pour Gmail
+        
+        # FIX EXÉCUTION ENVIRO-CLOUD (PORT 587 & STARTTLS)
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()  # Sécurise la connexion pour Gmail
             print("[+] Connexion TLS établie. Tentative de login...")
             server.login(email_sender, email_password)
             print("[+] Authentification réussie. Envoi du message...")
             server.send_message(message)
+            
         print("[+] Rapport d'analyse d'engagement Talentyz expédié avec succès.")
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
-
-# --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
+--- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Initialisation du scheduler explicitement en UTC
+    # 1. FIX CRITICAL : Initialisation du Vectorstore au démarrage de l'app
+    print("[+] Initialisation obligatoire du Vectorstore pour Questy RAG...")
+    setup_vectorstore()
+
+    # 2. Initialisation du scheduler explicitement en UTC
     scheduler = BackgroundScheduler(timezone="UTC")
-    
-    # 2. Ajout du job hebdomadaire avec datetime conscient du fuseau horaire (Aware)
-    # 'next_run_time' mis à 'now' force l'exécution immédiate au démarrage
+
+    # 3. Ajout du job hebdomadaire
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
         weeks=1, 
         next_run_time=datetime.now(timezone.utc)
     )
-    
-    # 3. Démarrage du scheduler
+
+    # 4. Démarrage du scheduler
     scheduler.start()
     print("[+] Scheduler démarré en UTC : Premier rapport initié en tâche de fond.")
-    
+
     yield
-    
-    # 4. Arrêt propre lors de la fermeture de l'application
+
+    # 5. Arrêt propre lors de la fermeture de l'application
     scheduler.shutdown()
     print("[-] Scheduler arrêté proprement.")
 
-
-# --- DÉCLARATION FASTAPI & MIDDLEWARES ---
+--- DÉCLARATION FASTAPI & MIDDLEWARES ---
 app = FastAPI(title="JeelQuest Questy V1", version="1.0", lifespan=lifespan)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://beta.jeelquest.space"],  
+    allow_origins=["https://beta.jeelquest.space"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 UPLOAD_FOLDER = "/tmp/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-# --- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
+--- ROUTINES COMMUNE DE NETTOYAGE (QUESTY RAG) ---
 def get_db_connection():
     if not MONGO_URI:
         raise Exception("MONGO_URI non configurée dans l'environnement.")
@@ -477,12 +475,12 @@ def clean_text(text: str) -> str:
     text = text.replace("\xa0", " ").replace("\t", " ")
     text = re.sub(r"[¢©®«#]", "", text)
     text = re.sub(r"\b[eJo]\b", "", text)
-    text = re.sub(r"^\s*o\s+", "- ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\so\s+", "- ", text, flags=re.MULTILINE)
     text = text.replace("&", "and")
     text = re.sub(r'(?<!\S)@(?!\S)', 'at', text)
     text = re.sub(r"\n+", "\n", text)
     text = re.sub(r"[ ]{2,}", " ", text)
-    text = re.sub(r"-\s*\n\s*", "", text)
+    text = re.sub(r"-\s\n\s*", "", text)
     text = "\n".join([line.strip() for line in text.splitlines()])
     return text.strip()
 
@@ -490,7 +488,7 @@ def clean_filename(filename):
     filename = unicodedata.normalize("NFKD", filename)
     filename = filename.encode("ascii", "ignore").decode("ascii")
     filename = filename.replace(" ", "_")
-    return re.sub(r"[^\w\.-]", "", filename)
+    return re.sub(r"[^\w.-]", "", filename)
 
 def split_text(text, chunk_size=300, overlap=50):
     chunks = []
@@ -501,8 +499,7 @@ def split_text(text, chunk_size=300, overlap=50):
         start += chunk_size - overlap
     return chunks
 
-
-# --- ENDPOINT 1 : CHARGEMENT ET CHUNKING DES DOCUMENTS ---
+--- ENDPOINT 1 : CHARGEMENT ET CHUNKING DES DOCUMENTS ---
 @app.post("/upload-documents/")
 async def upload_files(document: UploadFile = File(...)):
     uploaded_files = []
@@ -574,9 +571,13 @@ async def upload_files(document: UploadFile = File(...)):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-
-# --- ENDPOINT 2 : CHATBOT INTELLIGENT (QUESTY INFERENCE) ---
+--- ENDPOINT 2 : CHATBOT INTELLIGENT (QUESTY INFERENCE) ---
 def get_retriever():
+    global vectorstore
+    if vectorstore is None:
+        setup_vectorstore()
+    if vectorstore is None:
+        raise HTTPException(status_code=503, detail="Vectorstore non initialisé.")
     return vectorstore.as_retriever(search_kwargs={"k": 4})
 
 class ChatRequest(BaseModel):
