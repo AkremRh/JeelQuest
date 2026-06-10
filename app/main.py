@@ -422,40 +422,42 @@ def generate_report_and_send_email():
     except Exception as e:
         print(f"[-] Erreur critique lors de la génération automatique du rapport en tâche de fond : {e}")
 
-# --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
-@asynccontextmanager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialisation obligatoire du Vectorstore pour Questy RAG
+# --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN CORRIGÉ) ---
+@app.on_event("startup")
+async def startup_event():
+    # 1. Initialisation obligatoire du Vectorstore pour Questy RAG
     print("[+] Initialisation obligatoire du Vectorstore pour Questy RAG...")
     setup_vectorstore()
 
-    # Initialisation du scheduler explicitement en UTC
+    # 2. Initialisation du scheduler explicitement en UTC
+    global scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    # Ajout du job récurrent pour les semaines suivantes (sans next_run_time pour éviter le bug de décalage)
+    # 3. Ajout du job récurrent pour les semaines suivantes
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
         weeks=1
     )
 
-    # Démarrage du scheduler
+    # 4. Démarrage du scheduler
     scheduler.start()
     print("[+] Scheduler démarré en UTC.")
 
-    # FORCE LE PREMIER LANCEMENT DIRECTEMENT EN ARRIÈRE-PLAN AU DÉMARRAGE
+    # 5. Force le premier lancement en tâche de fond immédiate sans bloquer l'API
     asyncio.create_task(asyncio.to_thread(generate_report_and_send_email))
     print("[+] Premier rapport forcé au démarrage dans un thread dédié.")
 
-    yield
 
-    # Arrêt propre lors de la fermeture de l'application
-    scheduler.shutdown()
-    print("[-] Scheduler arrêté proprement.")
+@app.on_event("shutdown")
+def shutdown_event():
+    global scheduler
+    if 'scheduler' in globals():
+        scheduler.shutdown()
+        print("[-] Scheduler arrêté proprement.")
 
 # --- DÉCLARATION FASTAPI & MIDDLEWARES ---
-app = FastAPI(title="JeelQuest Questy V1", version="1.0", lifespan=lifespan)
+app = FastAPI(title="JeelQuest Questy V1", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://beta.jeelquest.space"],
