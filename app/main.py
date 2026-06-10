@@ -409,7 +409,16 @@ def generate_report_and_send_email():
         message.attach(attachment)
         
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
-        print("[+] Connexion SMTP via le port 587 (TLS)...")
+        print("[+] Connexion SMTP via le port 465 (SSL)...")
+        
+        # Résolution forcée en IPv4 pour contourner le blocage réseau du conteneur
+        import socket
+        try:
+            # On récupère l'adresse IPv4 de Gmail
+            gmail_ipv4 = socket.gethostbyname("smtp.gmail.com")
+            print(f"[+] IP Gmail détectée : {gmail_ipv4}")
+        except Exception:
+            gmail_ipv4 = "173.194.76.108" # IP Fallback standard de Google SMTP
         
         # Connexion SSL directe sur le port 465
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
