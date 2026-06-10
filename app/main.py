@@ -120,15 +120,21 @@ def clean_pdf_text(text):
 
 class CorporatePDF(FPDF):
     def header(self):
-        self.set_fill_color(31, 41, 55)
-        self.rect(0, 0, 210, 35, "F")
+        # Configuration du bandeau supérieur gris foncé
+        self.set_fill_color(31, 41, 55) # Couleur Ardoise / Gris foncé
+        self.rect(0, 0, 210, 35, "F") # Dessine le rectangle plein sur toute la largeur (A4: 210mm)
+        
+        # Configuration du texte dans l'en-tête
         self.set_text_color(255, 255, 255)
         self.set_font("Helvetica", "B", 14)
         self.set_y(10)
-        self.cell(0, 10, "TALENTYZ - BUSINESS ANALYTICS & ENGAGEMENT REPORT", align="L")
+        # Titre principal aligné à gauche
+        self.cell(0, 10, "TALENTYZ - BUSINESS ANALYTICS & ENGAGEMENT REPORT", new_x="RIGHT", new_y="TOP", align="L")
+        
+        # Date du jour alignée à droite
         self.set_font("Helvetica", "", 10)
-        self.cell(0, 10, f"Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}", align="R")
-        self.ln(20)
+        self.cell(0, 10, f"Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}", new_x="LMARGIN", new_y="NEXT", align="R")
+        self.ln(20) # Saut de ligne pour espacer le contenu du document
 
     def footer(self):
         self.set_y(-15)
