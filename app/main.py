@@ -176,7 +176,7 @@ def generate_report_and_send_email():
     try:
         print("[+] Étape 1 : Début du cycle analytique...")
         print(f"[+] Étape 2 : Tentative de connexion à MongoDB avec URI...")
-        client_mongo = MongoClient(MONGO_URI)
+        client_mongo = MongoClient(MONGO_URI_1)
         db = client_mongo["pfe"]
         
         obj_university_id = ObjectId(TARGET_UNIVERSITY_ID) if ObjectId.is_valid(TARGET_UNIVERSITY_ID) else None
