@@ -174,14 +174,17 @@ def generate_ai_academic_summary(users_df, quests_perf_str, total_quests_count):
 def generate_report_and_send_email():
     """Génère les graphiques d'activité, sollicite l'analyse de Gemini et distribue le PDF par email"""
     try:
-        print("[+] Initialisation du cycle analytique hebdomadaire...")
-        client_mongo = MongoClient(MONGO_URI_1)
+        print("[+] Étape 1 : Début du cycle analytique...")
+        print(f"[+] Étape 2 : Tentative de connexion à MongoDB avec URI...")
+        client_mongo = MongoClient(MONGO_URI)
         db = client_mongo["pfe"]
         
         obj_university_id = ObjectId(TARGET_UNIVERSITY_ID) if ObjectId.is_valid(TARGET_UNIVERSITY_ID) else None
         query_user = {"$or": [{"universityId": TARGET_UNIVERSITY_ID}, {"universityId": obj_university_id}]}
         
+        print("[+] Étape 3 : Requête de récupération des utilisateurs...")
         users_list = list(db["users"].find(query_user))
+        print(f"[+] Étape 4 : {len(users_list)} utilisateurs récupérés.")
         if not users_list:
             print("[-] Extraction impossible : Aucun utilisateur référencé pour cette entité.")
             return
@@ -407,7 +410,7 @@ def generate_report_and_send_email():
         attachment = MIMEApplication(pdf_buffer.read(), _subtype='pdf')
         attachment.add_header('Content-Disposition', 'attachment', filename=f"Talentyz_Visual_Report_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.pdf")
         message.attach(attachment)
-
+        print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(email_sender, email_password)
             server.send_message(message)
