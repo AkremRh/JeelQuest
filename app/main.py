@@ -411,7 +411,7 @@ def generate_report_and_send_email():
         print("[+] Étape 5 : Tentative de connexion SMTP à Gmail...")
         print("[+] Connexion SMTP via le port 587 (TLS)...")
         
-        # Connexion SMTP classique sécurisée par TLS pour les environnements Cloud
+        # Connexion SSL directe sur le port 465
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             print("[+] Connexion SSL établie. Tentative de login...")
             server.login(email_sender, email_password)
@@ -424,25 +424,29 @@ def generate_report_and_send_email():
 
 # --- GESTION DES CYCLE DE VIE DE L'APPLICATION (LIFESPAN SÉCURISÉ) ---
 @asynccontextmanager
+@asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialisation obligatoire du Vectorstore au démarrage de l'application
+    # Initialisation obligatoire du Vectorstore pour Questy RAG
     print("[+] Initialisation obligatoire du Vectorstore pour Questy RAG...")
     setup_vectorstore()
 
     # Initialisation du scheduler explicitement en UTC
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    # Ajout du job hebdomadaire avec exécution immédiate
+    # Ajout du job récurrent pour les semaines suivantes (sans next_run_time pour éviter le bug de décalage)
     scheduler.add_job(
         generate_report_and_send_email, 
         'interval', 
-        weeks=1, 
-        next_run_time=datetime.now(timezone.utc)
+        weeks=1
     )
 
     # Démarrage du scheduler
     scheduler.start()
-    print("[+] Scheduler démarré en UTC : Premier rapport initié en tâche de fond.")
+    print("[+] Scheduler démarré en UTC.")
+
+    # FORCE LE PREMIER LANCEMENT DIRECTEMENT EN ARRIÈRE-PLAN AU DÉMARRAGE
+    asyncio.create_task(asyncio.to_thread(generate_report_and_send_email))
+    print("[+] Premier rapport forcé au démarrage dans un thread dédié.")
 
     yield
 
